@@ -1,2 +1,3 @@
 # pgtos3backup
-Image to backup pg dumps to s3
+
+Use this imag to backup pg dumps to s3
