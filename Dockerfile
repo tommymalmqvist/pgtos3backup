@@ -10,4 +10,4 @@ COPY credentials /root/.aws/credentials
 
 RUN chmod 600 /root/.aws/*
 
-ENTRYPOINT ["/usr/bin/backup.sh"]
+ENTRYPOINT ["/root/backup/backup.sh"]
