@@ -1,0 +1,118 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  creationTimestamp: null
+  name: backup-script
+data:
+  backup.sh: |
+    #!/bin/sh
+    cp /root/postgres/pgpass /root/.pgpass
+    cp /root/aws/credentials /root/.aws/
+    cp /root/aws/config /root/.aws/
+    ls -l /root/aws
+    ls -l /root/.aws
+    chmod 600 /root/.pgpass
+    export BACKUP_FILE=$(echo /backup_$(date +%Y%m%d_%H%M).pgdump)
+    pg_dump -d $POSTGRES_DB \
+    -U $POSTGRES_USER \
+    -h $POSTGRES_HOST \
+    -f $BACKUP_FILE \
+    -W
+    bzip2 $BACKUP_FILE
+    mcrypt $BACKUP_FILE.bz2 -k $BACKUP_FILE_PW
+    aws s3 cp ${BACKUP_FILE}.bz2.nc s3://$S3_BUCKET
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pgpass
+data:
+  pgpass: base64encodedsecret
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws
+data:
+  credentials: base64encodedsecret
+  config: base64encodedsecret
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup
+data:
+  password: base64encodedsecret
+
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: postgres-backup
+spec:
+  schedule: 0 0 * * *
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: postgres-backup
+              image: tommymalmqvist/pgtos3backup:latest
+              imagePullPolicy: Always
+              env:
+                - name: S3_BUCKET
+                  value: kundportalen-backup
+                - name: awsconfig
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws
+                      key: config
+                - name: awscredentials
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws
+                      key: credentials
+                - name: BACKUP_FILE_PW
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup
+                      key: password
+                - name: POSTGRES_DB
+                  value: db
+                - name: POSTGRES_USER
+                  value: user
+                - name: POSTGRES_HOST
+                  value: host
+                - name: PGSSLMODE
+                  value: disable
+                - name: PGPORT
+                  value: "5432"
+                - name: PGPASSFILE
+                  value: "/root/.pgpass"
+              volumeMounts:
+                - name: pgpass
+                  mountPath: "/root/postgres"
+                  readOnly: true
+                - name: backup-script
+                  mountPath: "/root/backup"
+                  readOnly: true
+                - name: aws
+                  mountPath: "/root/aws"
+                  readOnly: true
+          volumes:
+            - name: backup-script
+              configMap:
+                name: backup-script
+                defaultMode: 0764
+            - name: pgpass
+              secret:
+                defaultMode: 0620
+                secretName: pgpass
+            - name: aws
+              secret:
+                defaultMode: 0620
+                secretName: aws
+          restartPolicy: Never
