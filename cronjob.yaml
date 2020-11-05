@@ -9,8 +9,6 @@ data:
     cp /root/postgres/pgpass /root/.pgpass
     cp /root/aws/credentials /root/.aws/
     cp /root/aws/config /root/.aws/
-    ls -l /root/aws
-    ls -l /root/.aws
     chmod 600 /root/.pgpass
     export BACKUP_FILE=$(echo /backup_$(date +%Y%m%d_%H%M).pgdump)
     pg_dump -d $POSTGRES_DB \
